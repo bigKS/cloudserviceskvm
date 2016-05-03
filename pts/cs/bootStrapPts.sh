@@ -8,8 +8,9 @@
 #
 # This script, while run as part of initialization in rc.local, will wake up
 # and run in "auto-detect" mode.  It will check it's eth1 ip, then check 
-# the DPI1.mapping, DPI2.mapping and customer.mapping files  (which should
-# also exist in /root/cs folder of PTS), to figure out what the
+# the DPI1.mapping, DPI2.mapping, moreSDE.mapping, moreSPB.mapping  and 
+# customer.mapping files (which might exist in mappings sub-folder in git, but should
+# end up existing in /root/cs folder of PTS), to figure out what the
 # corresponding sde and spb IPs are and which dpi blade this VM is to live on.
 # Then the PTS will self-configure itself (policy files, rc.conf, etc.).
 #
@@ -126,9 +127,9 @@ function svreloadNoError () {
 logPrefix="CloudServices PTS Bootstrap: "
 function printErrorExit () {
 
-                # Senc logs to svlog and screen...
-        echo "$logPrefix: $(date): FATAL ERROR: $@" | tee -a /var/log/svlog
-        exit 1
+	# Send logs to svlog and screen...
+	echo "$logPrefix: $(date): FATAL ERROR: $@" | tee -a /var/log/svlog
+	exit 1
 }
 
 ## Main part of script starts here:
@@ -140,12 +141,12 @@ ifconfig eth1 1> /dev/null || printErrorExit "Cannot find eth1 using ifconfig."
 echo "Will attempt to find eth1 interface, and the v4 ip it was assigned..."
 ipAddress=$(ifconfig eth1 | grep -v inet6 | grep inet | awk '{print $2}' )
 if (( $? !=0 )); then
-        printErrorExit "Cannot find ip address for eth1. Expectation was for DHCP broadcast to be used to assign ip to this interface"
+	printErrorExit "Cannot find ip address for eth1. Expectation was for DHCP broadcast to be used to assign ip to this interface"
 fi
 
 # Check that IP is well-defined...
 if [[ ! $ipAddress =~ [0-9]+.[0-9]+.[0-9]+.[0-9]+ ]] ; then
-        printErrorExit "The extracted v4 ip on eth1 <$ipAddress> seems to be malformed or incorrect."
+	printErrorExit "The extracted v4 ip on eth1 <$ipAddress> seems to be malformed or incorrect."
 fi
 echo "Successfully found eth1 interface v4 ip <$ipAddress>"
 
@@ -153,19 +154,20 @@ echo "Successfully found eth1 interface v4 ip <$ipAddress>"
 if [[ -z $dpiNum ]]; then
     echo "A dpi number was not provided as an argument to this script.  Will attempt to determine this automatically"
 
-        # Check both DPI1.mapping and DPI2.mapping to see which file the ip address lives in
-        DPI=$(egrep "$ipAddress($| |\t)" DPI*.mapping | cut -f1 -d: | cut -f1 -d\.)
+	# Check both DPI1.mapping and DPI2.mapping to see which file the ip address lives in
+	DPI=$(egrep "$ipAddress($| |\t)" DPI*.mapping | cut -f1 -d: | cut -f1 -d\.)
 
-        if [[ ! $DPI =~ DPI[12] ]] ; then
-                printErrorExit "Cannot seem to determine dpi blade number from eth1 ip address and mapping files"
-        fi
+	if [[ ! $DPI =~ DPI[12] ]] ; then
+		printErrorExit "Cannot seem to determine dpi blade number from eth1 ip address and mapping files"
+	fi
 
-        if [[ $DPI == DPI1 ]]; then
-                dpiNum=1
-        else
-                dpiNum=2
-        fi
-        echo "Auto determined the dpi blade number to be <$dpiNum>"
+	if [[ $DPI == DPI1 ]]; then
+		dpiNum=1
+	else
+		dpiNum=2
+	fi
+
+	echo "Auto determined the dpi blade number to be <$dpiNum>"
 fi
 
 # Now that we know blade number, we know which DPI1.mapping vs. DPI2.mapping
@@ -196,16 +198,16 @@ echo "Above list of vlans corresponding to VLANFFNs <$vlanFNNs>"
 
 # If user did not supply a sde ip with script argument, try to auto determine this...
 if [[ -z $sdeIp ]]; then
-        echo "Since a sde ip was not provided as argument to this script, attempting to determine this automatically..."
-        sdeIp=$(grep -h "$VPNFNN" moreSDE.mapping moreSPB.mapping | grep SDE | awk '{print $4}')
-        echo "Determined that sde ip is <$sdeIp>"
+	echo "Since a sde ip was not provided as argument to this script, attempting to determine this automatically..."
+	sdeIp=$(grep -h "$VPNFNN" moreSDE.mapping moreSPB.mapping | grep SDE | awk '{print $4}')
+	echo "Determined that sde ip is <$sdeIp>"
 fi
 
 # If usre did not supply a spb ip with script argument, try to auto determine this...
 if [[ -z $spbIp ]]; then
-        echo "Since a spb ip was not provided as argument to this script, attempting to determine this automatically..."
-        spbIp=$(grep -h "$VPNFNN" moreSDE.mapping moreSPB.mapping | grep SPB | awk '{print $4}')
-        echo "Determined that spb ip is <$spbIp>"
+	echo "Since a spb ip was not provided as argument to this script, attempting to determine this automatically..."
+	spbIp=$(grep -h "$VPNFNN" moreSDE.mapping moreSPB.mapping | grep SPB | awk '{print $4}')
+	echo "Determined that spb ip is <$spbIp>"
 fi
 
 echo -e "Will now attempt to self configure for:\nSDE with service ip <$sdeIp> and SPB with service ip <$spbIp>"
@@ -214,7 +216,7 @@ echo -e "Will now attempt to self configure for:\nSDE with service ip <$sdeIp> a
 diamPeerConfig=/usr/local/sandvine/etc/diam_peer_config.xml
 diamPeerConfigBackup=/usr/local/sandvine/etc/diam_peer_config.xml.bootstrap
 if [[ -e $diamPeerConfigBackup ]]; then
-        cp $diamPeerConfigBackup $diamPeerConfig
+	cp $diamPeerConfigBackup $diamPeerConfig
 fi
 cp $diamPeerConfig $diamPeerConfigBackup
 sed -i -e "s/192.168.192.140/$sdeIp/g" $diamPeerConfig
@@ -224,7 +226,7 @@ echo "Modified <$diamPeerConfig> to account for sde ip <$sdeIp>"
 diamConfig=/usr/local/sandvine/etc/policy.pts.cs.diameter_config.conf
 diamConfigBackup=/usr/local/sandvine/etc/policy.pts.cs.diameter_config.conf.bootstrap
 if [[ -e $diamConfigBackup ]]; then
-        cp $diamConfigBackup $diamConfig
+	cp $diamConfigBackup $diamConfig
 fi
 cp $diamConfig $diamConfigBackup
 sed -i -e "s/pts/pts${dpiNum}/g" $diamConfig
@@ -241,11 +243,11 @@ echo -e "PolicyGroup\n{\n"
 IFS=$' '
 for vlanFNN in $vlanFNNs; do
 
-        vlan=$(grep "$vlanFNN" customer.mapping | awk '{print $2}')
+	vlan=$(grep "$vlanFNN" customer.mapping | awk '{print $2}')
 
-        echo -e "\t# Link/site will be <VPNFNN>-<VLANFNN> with 1 or 2 suffix to denote dpi blade"
-        echo -e "\tif expr((Flow.Subscriber.Tx.Vlan=$vlan) or (Flow.Subscriber.Rx.Vlan=$vlan)) then set Classifier.LinkData = \"$VPNFNN-$vlanFNN${dpiNum}\""
-        echo
+	echo -e "\t# Link/site will be <VPNFNN>-<VLANFNN> with 1 or 2 suffix to denote dpi blade"
+	echo -e "\tif expr((Flow.Subscriber.Tx.Vlan=$vlan) or (Flow.Subscriber.Rx.Vlan=$vlan)) then set Classifier.LinkData = \"$VPNFNN-$vlanFNN${dpiNum}\""
+	echo
 done
 
 echo -e "\t# Unexpected VLAN tags will be labelled with this link/site ..."
@@ -255,7 +257,7 @@ echo -e "}"
 echo
 
 echo "include \"/usr/local/sandvine/etc/policy.pts.cs.main.conf\""
-echo "#include \"/usr/local/sandvine/etc/policy.pts.cs.custom_policies.conf\""
+echo "include \"/usr/local/sandvine/etc/policy.pts.cs.custom_policies.conf\""
 echo "include \"/usr/local/sandvine/etc/policy.pts.cs.telstra.conf\""
 
 } > $newPolicyFile
@@ -264,7 +266,7 @@ echo "include \"/usr/local/sandvine/etc/policy.pts.cs.telstra.conf\""
 policyFile=/usr/local/sandvine/etc/policy.conf
 policyFileBackup=/usr/local/sandvine/etc/policy.conf.bootstrap
 if [[ -e $policyFileBackup ]]; then
-        cp $policyFileBackup $policyFile
+	cp $policyFileBackup $policyFile
 fi
 cp $policyFile $policyFileBackup
 mv $newPolicyFile $policyFile
@@ -273,15 +275,15 @@ echo "Created a new policy.conf file customized for the vlans this PTS will see"
 
 if [[ -z $ccIp ]]; then
     echo "Since a cc spb ip was not provided as argument to this script, using default one set at top of script <$DEFAULT_CC_IP>"
-        ccIp=$DEFAULT_CC_IP
+	ccIp=$DEFAULT_CC_IP
 else
-        echo "You passed in cc ip of <$ccIp>.  Using this to configure rc.conf."
+   echo "You passed in cc ip of <$ccIp>.  Using this to configure rc.conf."
 fi
 
 rcConfFile=/usr/local/sandvine/etc/rc.conf
 rcConfFileBackup=/usr/local/sandvine/etc/rc.conf.bootstrap
 if [[ -e $rcConfFileBackup ]]; then
-        cp $rcConfFileBackup $rcConfFile
+	cp $rcConfFileBackup $rcConfFile
 fi
 cp $rcConfFile $rcConfFileBackup
 
@@ -292,6 +294,7 @@ echo "Modified rc.conf to account for stats/subs spb ip <$spbIp>"
 
 # We also need to first append CC spb ip into rc.conf
 cat <<EOF >>$rcConfFile
+
 cluster_name="PTS$VPNFNN-$vlanFNN${dpiNum}"
 
 spb_domains="spbDomainsControlCenterSPB"
@@ -300,6 +303,6 @@ spbDomainsControlCenterSPB__servers="$ccIp"
 spbDomainsControlCenterSPB__roles="control"
 EOF
 
-echo "Appended rc.conf to point to control centre spb with ip <$ccIp>"
+echo "Appended configs into rc.conf to point to control centre spb with ip <$ccIp>"
 
 svreloadNoError || printErrorExit "svreload failed... please investigate."
