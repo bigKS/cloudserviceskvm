@@ -12,6 +12,7 @@
 
 touch /var/lock/subsys/local
 
+
 ## CloudServices part:
 # The below code will run automtaically will run at PTS boot and will
 # check 'show system services' svcli command to see if all services are online.
@@ -28,9 +29,10 @@ numOnlineServices ()
     # This counts the number of (non-svbgpd) sv services that are [online]
     # as per 'show system services'
     count=$(/usr/local/bin/svcli -c "show system services" | 
-			egrep -v 'Name|^[ \t]*$|---' | grep -v svbgpd | 
-			awk '{print $3}' | fgrep '[online]' | 
-			sort | uniq -c | awk '{print $1}')
+			egrep -v 'Name|^[ \t]*$|---' | 
+			grep -v svbgpd | awk '{print $3}' | 
+			fgrep '[online]' | sort | 
+			uniq -c | awk '{print $1}')
 
 	if [[ $count =~ [0-9]+ ]]; then
 		echo $count
@@ -41,11 +43,11 @@ numOnlineServices ()
 
 waitUntilServicesUpAndRunBootStrap ()
 {
-    # Every second, upto 100 tries, check if
+    # Every second, upto 200 tries, check if
     # 6 services are up (cnd,msd,scdpd,ptsd,ptsm,lmd}
     #  ... run the PTS bootstrap script if so
     # If we exhaust all tries... log an error message in svlog
-    for i in {1..100};
+    for i in {1..200};
     do
         numOnline=$(numOnlineServices)
         if (( $numOnline == 6 )); then
@@ -58,10 +60,10 @@ waitUntilServicesUpAndRunBootStrap ()
         sleep 1;
     done
 
-        # Outside for loop (polling) above... we waited long enough and services
-        # did not come up
-        echo "$(date): BOOTSTRAP: On 100 iteration, still did not detect 6 online sv-services. PTS Bootstrapping will not occur. Please investigate" >> /var/log/svlog
-        return 1
+	# Outside for loop (polling) above... we waited long enough and services
+	# did not come up
+	echo "$(date): BOOTSTRAP: After 200 iterations, still did not detect 6 online sv-services. PTS Bootstrapping will not occur. Please investigate" >> /var/log/svlog 
+	return 1
 }
 
 # Run bootstrap process
