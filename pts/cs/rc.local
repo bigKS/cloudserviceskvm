@@ -1,0 +1,73 @@
+#!/bin/bash
+# THIS FILE IS ADDED FOR COMPATIBILITY PURPOSES
+#
+# It is highly advisable to create own systemd services or udev rules
+# to run scripts during boot instead of using this file.
+#
+# In contrast to previous versions due to parallel execution during boot
+# this script will NOT be run after all other services.
+#
+# Please note that you must run 'chmod +x /etc/rc.d/rc.local' to ensure
+# that this script will be executed during boot.
+
+touch /var/lock/subsys/local
+
+## CloudServices part:
+# The below code will run automtaically will run at PTS boot and will
+# check 'show system services' svcli command to see if all services are online.
+# It will keep polling until it sees the 6 requires services as online.
+# Once that is detected, it will launch the PTS bootstrap process
+# (see /root/cs/bootStrapPts.sh for more details).  This process will
+# self configure the PTS based on the IP that external DHCP server returned
+# for eth1 interface.   The configuration will set up policy, rc.conf, diameter,
+# etc. to configure this PTS for the specific customer and vlans that it has to
+# manager, and also connect it via service network to the correct SDE, SPB and CC
+# SPB.
+numOnlineServices ()
+{
+    # This counts the number of (non-svbgpd) sv services that are [online]
+    # as per 'show system services'
+    count=$(/usr/local/bin/svcli -c "show system services" | 
+			egrep -v 'Name|^[ \t]*$|---' | grep -v svbgpd | 
+			awk '{print $3}' | fgrep '[online]' | 
+			sort | uniq -c | awk '{print $1}')
+
+	if [[ $count =~ [0-9]+ ]]; then
+		echo $count
+	else
+		echo 0
+	fi
+}
+
+waitUntilServicesUpAndRunBootStrap ()
+{
+    # Every second, upto 100 tries, check if
+    # 6 services are up (cnd,msd,scdpd,ptsd,ptsm,lmd}
+    #  ... run the PTS bootstrap script if so
+    # If we exhaust all tries... log an error message in svlog
+    for i in {1..100};
+    do
+        numOnline=$(numOnlineServices)
+        if (( $numOnline == 6 )); then
+                echo "$(date): BOOTSTRAP: Detected that all 6 sv services are up. Starting bootstrap process for Cloud Services..." >> /var/log/svlog
+                /root/cs/bootStrapPts.sh
+                return $?
+        else
+            echo "$(date): BOOTSTRAP: Only <$numOnline> sv services are up. Waiting another second to check again before bootstrapping." >> /var/log/svlog
+        fi;
+        sleep 1;
+    done
+
+        # Outside for loop (polling) above... we waited long enough and services
+        # did not come up
+        echo "$(date): BOOTSTRAP: On 100 iteration, still did not detect 6 online sv-services. PTS Bootstrapping will not occur. Please investigate" >> /var/log/svlog
+        return 1
+}
+
+# Run bootstrap process
+if waitUntilServicesUpAndRunBootStrap; then
+        echo "$(date): BOOTSTRAP: Bootstrapping PTS for CloudServices seems to have succeeded."  >> /var/log/svlog
+else
+        echo "$(date): BOOTSTRAP: Bootstrapping PTS seems to have failed. Check logs above." >> /var/log/svlog
+fi
+
