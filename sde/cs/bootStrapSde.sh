@@ -14,9 +14,6 @@
 # corresponding sde and spb IPs are and which dpi blade this VM is to live on.
 # Then the SDE will self-configure itself (csd.conf, rc.conf, etc.).
 #
-# Note, the default control centre SPB IP is set directly in this script below
-# and does not come from mapping files.
-#
 # Manual mode:  This script can be run manually whilst specifying specific
 #               items that this script would normally auto detect. See
 #				optional arguments below for more details.
