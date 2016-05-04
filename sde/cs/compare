@@ -4,22 +4,22 @@
 #
 # Script used to bootstrap a SDE (which has CSD/Influx on it too)
 # Expectation is for this to be run in /etc/rc.d/rc.local
-#    (note, one must make sure the execute bit of rc.local are on). 
+#    (note, one must make sure the execute bit of rc.local are on).
 #
 # This script, while run as part of initialization in rc.local, will wake up
-# and run in "auto-detect" mode.  It will check it's eth1 ip, then check 
-# the DPI1.mapping, DPI2.mapping, moreSDE.mapping, moreSPB.mapping  and 
+# and run in "auto-detect" mode.  It will check it's eth1 ip, then check
+# the DPI1.mapping, DPI2.mapping, moreSDE.mapping, moreSPB.mapping  and
 # customer.mapping files (which might exist in mappings sub-folder in git, but should
-# end up existing in /root/cs folder of SPB), to figure out what the
+# end up existing in /root/cs folder of PTS), to figure out what the
 # corresponding sde and spb IPs are and which dpi blade this VM is to live on.
-# Then the SDE will self-configure itself (csd.conf, rc.conf, etc.).
+# Then the PTS will self-configure itself (policy files, rc.conf, etc.).
 #
 # Note, the default control centre SPB IP is set directly in this script below
 # and does not come from mapping files.
 #
 # Manual mode:  This script can be run manually whilst specifying specific
 #               items that this script would normally auto detect. See
-#				optional arguments below for more details.
+#                               optional arguments below for more details.
 #
 #
 
@@ -53,37 +53,46 @@ case $i in
 ## We check if various backup files (that this script intends to modify) exist, and revert them...
 
 revertHappened=0
-#(1) csd config:
-csdConf=/etc/csd.conf
-csdConfBackup=/etc/csd.conf.bootstrap
-if [[ -e $csdConfBackup ]]; then
-    echo "Found file <$csdConfBackup>. Reverting this into <$csdConf>."
-	mv $csdConfBackup $csdConf
-	revertHappened=1
-fi
-
-#(2) Diameter peer config:
+#(1) Diameter peer config:
 diamPeerConfig=/usr/local/sandvine/etc/diam_peer_config.xml
 diamPeerConfigBackup=/usr/local/sandvine/etc/diam_peer_config.xml.bootstrap
 if [[ -e $diamPeerConfigBackup ]]; then
     echo "Found file <$diamPeerConfigBackup>. Reverting this into <$diamPeerConfig>."
-	mv $diamPeerConfigBackup $diamPeerConfig
-	revertHappened=1
+        mv $diamPeerConfigBackup $diamPeerConfig
+        revertHappened=1
 fi
 
-# (3) rc.conf (for spb and cc spb configs):
+# (2) Diameter policy config file:
+diamConfig=/usr/local/sandvine/etc/policy.pts.cs.diameter_config.conf
+diamConfigBackup=/usr/local/sandvine/etc/policy.pts.cs.diameter_config.conf.bootstrap
+if [[ -e $diamConfigBackup ]]; then
+        echo "Found file <$diamConfigBackup>. Reverting this into <$diamConfig>."
+        mv $diamConfigBackup $diamConfig
+        revertHappened=1
+fi
+
+# (3) Policy file:
+policyFile=/usr/local/sandvine/etc/policy.conf
+policyFileBackup=/usr/local/sandvine/etc/policy.conf.bootstrap
+if [[ -e $policyFileBackup ]]; then
+        echo "Found file <$policyFileBackup>. Reverting this into <$policyFile>."
+        mv $policyFileBackup $policyFile
+    revertHappened=1
+fi
+
+# (4) rc.conf (for spb and cc spb configs):
 rcConfFile=/usr/local/sandvine/etc/rc.conf
 rcConfFileBackup=/usr/local/sandvine/etc/rc.conf.bootstrap
 if [[ -e $rcConfFileBackup ]]; then
-	echo "Found file <$rcConfFileBackup>. Reverting this into <$rcConfFile>."
-	mv $rcConfFileBackup $rcConfFile
-	revertHappened=1
+        echo "Found file <$rcConfFileBackup>. Reverting this into <$rcConfFile>."
+        mv $rcConfFileBackup $rcConfFile
+        revertHappened=1
 fi
 
 if (( revertHappened == 1 )); then
-	echo "Reverting finished."
+        echo "Reverting finished."
 else
-	echo "There is nothing to revert."
+        echo "There is nothing to revert."
 fi
 
 exit 0
@@ -108,9 +117,9 @@ function svreloadNoError () {
 logPrefix="CloudServices SDE Bootstrap: "
 function printErrorExit () {
 
-	# Send logs to svlog and screen...
-	echo "$logPrefix: $(date): FATAL ERROR: $@" | tee -a /var/log/svlog
-	exit 1
+        # Send logs to svlog and screen...
+        echo "$logPrefix: $(date): FATAL ERROR: $@" | tee -a /var/log/svlog
+        exit 1
 }
 
 ## Main part of script starts here:
@@ -122,12 +131,12 @@ ifconfig eth1 1> /dev/null || printErrorExit "Cannot find eth1 using ifconfig."
 echo "Will attempt to find eth1 interface, and the v4 ip it was assigned..."
 ipAddress=$(ifconfig eth1 | grep -v inet6 | grep inet | awk '{print $2}' | cut -d: -f2  )
 if (( $? !=0 )); then
-	printErrorExit "Cannot find ip address for eth1. Expectation was for DHCP broadcast to be used to assign ip to this interface"
+        printErrorExit "Cannot find ip address for eth1. Expectation was for DHCP broadcast to be used to assign ip to this interface"
 fi
 
 # Check that IP is well-defined...
 if [[ ! $ipAddress =~ [0-9]+.[0-9]+.[0-9]+.[0-9]+ ]] ; then
-	printErrorExit "The extracted v4 ip on eth1 <$ipAddress> seems to be malformed or incorrect."
+        printErrorExit "The extracted v4 ip on eth1 <$ipAddress> seems to be malformed or incorrect."
 fi
 echo "Successfully found eth1 interface v4 ip <$ipAddress>"
 
@@ -135,7 +144,7 @@ echo "Successfully found eth1 interface v4 ip <$ipAddress>"
 ipLineInMappingFile=$(egrep -h "$ipAddress($|\t| )" more*.mapping)
 
 if [[ -z $ipLineInMappingFile ]] || (( $(echo "$ipLineInMappingFile" | wc -l ) != 1 )); then
-	printErrorExist "Cannot seem to find ip address in the SDE/SPB mapping files. Grep in these files for up came up with <$ipLineInMappingFile>"
+        printErrorExist "Cannot seem to find ip address in the SDE/SPB mapping files. Grep in these files for up came up with <$ipLineInMappingFile>"
 fi
 
 # Extract VPNFNN from the line extracted from mapping file
@@ -146,19 +155,19 @@ fi
 
 # If user did not provide pts1 ip to this script...
 if [[ -z $pts1Ip ]]; then
-	echo "Ip for PTS1 was not provided as an argument to this script. Will attempt to determine this automaticall"
+        echo "Ip for PTS1 was not provided as an argument to this script. Will attempt to determine this automaticall"
 
-	# PTS1's ip lives in this file
-	dpi1MappingFile=DPI1.mapping
+        # PTS1's ip lives in this file
+        dpi1MappingFile=DPI1.mapping
 
-	# Extract the PTS IP
-	pts1Ip=$(grep "$VPNFNN" "$dpi1MappingFile" | awk '{print $4}')
+        # Extract the PTS IP
+        pts1Ip=$(grep "$VPNFNN" "$dpi1MappingFile" | awk '{print $4}')
 
-	# Check that IP is well-defined...
-	if [[ ! $pts1Ip =~ [0-9]+.[0-9]+.[0-9]+.[0-9]+ ]] ; then
-	    printErrorExit "The extracted PTS1 ip <$pts1Ip> seems to be malformed or incorrect."
-	fi
-	echo "Successfully found PTS1 ip <$pts1Ip>"
+        # Check that IP is well-defined...
+        if [[ ! $pts1Ip =~ [0-9]+.[0-9]+.[0-9]+.[0-9]+ ]] ; then
+            printErrorExit "The extracted PTS1 ip <$pts1Ip> seems to be malformed or incorrect."
+        fi
+        echo "Successfully found PTS1 ip <$pts1Ip>"
 
 fi
 
@@ -181,11 +190,11 @@ if [[ -z $pts2Ip ]]; then
 fi
 
 if [[ -z $spbIp ]]; then
-	echo "Ip for SPB(stats) was not provided as an argument to this script. Will attempt ot determin this automatically."
+        echo "Ip for SPB(stats) was not provided as an argument to this script. Will attempt ot determin this automatically."
 
-	spbIp=$(grep -h "$VPNFNN" more*.mapping | egrep -v "$ipAddress($|\t| )" | awk '{print $4}')
+        spbIp=$(grep -h "$VPNFNN" more*.mapping | egrep -v "$ipAddress($|\t| )" | awk '{print $4}')
 
-	# Check that IP is well-define...	
+        # Check that IP is well-define...
     if [[ ! $spbIp =~ [0-9]+.[0-9]+.[0-9]+.[0-9]+ ]] ; then
         printErrorExit "The extracted PTS2 ip <$spbIp> seems to be malformed or incorrect."
     fi
@@ -197,19 +206,17 @@ echo -e "Will now attempt to self configure for:\nSPB with service ip <$spbIp> a
 csdConf=/etc/csd.conf
 csdConfBackup=/etc/csd.conf.bootstrap
 if [[ -e $csdConfBackup ]]; then
-	cp $csdConfBackup $csdConf
+        cp $csdConfBackup $csdConf
 fi
 cp $csdConf $csdConfBackup
 
 # Modify default qcow SPB and SDE Ips in csd.conf
 sed -i -e "s/192.168.192.130/$spbIp/g" -e "s/192.168.192.140/$ipAddress/g" $csdConf
 
-echo "Modified csd.conf to account for spb ip and local ip"
-
 rcConfFile=/usr/local/sandvine/etc/rc.conf
 rcConfFileBackup=/usr/local/sandvine/etc/rc.conf.bootstrap
 if [[ -e $rcConfFileBackup ]]; then
-	cp $rcConfFileBackup $rcConfFile
+        cp $rcConfFileBackup $rcConfFile
 fi
 cp $rcConfFile $rcConfFileBackup
 
@@ -218,19 +225,8 @@ sed -i -e "s/192.168.192.130/$spbIp/g" $rcConfFile
 
 echo "Modified rc.conf to account for stats/subs spb ip <$spbIp>"
 
-# Configure SDE IPs (for svsde, csd, ga diam peers) in diam_peer_config.xml
-diamPeerConfig=/usr/local/sandvine/etc/diam_peer_config.xml
-diamPeerConfigBackup=/usr/local/sandvine/etc/diam_peer_config.xml.bootstrap
-if [[ -e $diamPeerConfigBackup ]]; then
-    cp $diamPeerConfigBackup $diamPeerConfig
-fi
-cp $diamPeerConfig $diamPeerConfigBackup
-sed -i -e "s/192.168.192.140/$ipAddress/g" $diamPeerConfig
-sed -i -e "s/192.168.192.150/$pts1Ip/g" $diamPeerConfig
-sed -i -e "s/192.168.192.151/$pts2Ip/g" $diamPeerConfig
 
-echo "Modified <$diamPeerConfig> to account for CSD(sde), PTS1, and PTS2 IPs"
+echo "Appended configs into rc.conf to point to control centre spb with ip <$ccIp>"
 
 svreloadNoError || printErrorExit "svreload failed... please investigate."
 
-service csd restart || printErrorExit "csd restart failed... please investigate."
