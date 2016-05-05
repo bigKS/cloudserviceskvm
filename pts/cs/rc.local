@@ -52,7 +52,7 @@ waitUntilServicesUpAndRunBootStrap ()
         numOnline=$(numOnlineServices)
         if (( $numOnline == 6 )); then
                 echo "$(date): BOOTSTRAP: Detected that all 6 sv services are up. Starting bootstrap process for Cloud Services..." >> /var/log/svlog
-                /root/cs/bootStrapPts.sh
+                /root/cs/bootStrapPts.sh &> /dev/null
                 return $?
         else
             echo "$(date): BOOTSTRAP: Only <$numOnline> sv services are up. Waiting another second to check again before bootstrapping." >> /var/log/svlog

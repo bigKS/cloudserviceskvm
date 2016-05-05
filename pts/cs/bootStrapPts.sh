@@ -219,8 +219,8 @@ if [[ -e $diamPeerConfigBackup ]]; then
 	cp $diamPeerConfigBackup $diamPeerConfig
 fi
 cp $diamPeerConfig $diamPeerConfigBackup
-sed -i -e "s/192.168.192.140/$sdeIp/g" $diamPeerConfig
-echo "Modified <$diamPeerConfig> to account for sde ip <$sdeIp>"
+sed -i -e "s/192.168.192.140/$sdeIp/g" -e "s/pts/pts${dpiNum}/g" $diamPeerConfig
+echo "Modified <$diamPeerConfig> to account for sde ip <$sdeIp>, and local identity to <pts${dpiNum}>"
 
 # Configure PTS name in diameter config policy file
 diamConfig=/usr/local/sandvine/etc/policy.pts.cs.diameter_config.conf
